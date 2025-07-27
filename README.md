@@ -44,4 +44,4 @@ Accepts a ```const char[]``` literal
 
 ```cpp
 const char* hidden = obfuscate("Secret123!");
-// Internally obfuscated with XOR```
+```
