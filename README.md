@@ -1,6 +1,6 @@
 🔒 C++ String Obfuscator (XOR-Based)
 
-✨ Features
+ Features
 - Compile-time XOR obfuscation of char[] and wchar_t[]
 - Simple macro usage with automatic seed based on source line number
 - Easy integration (just include one header)
@@ -23,7 +23,7 @@ int main() {
 ```
 
 
-🔐 Overview
+ Overview
 ```obfuscate("string")```
 Accepts a ```const char[]``` literal
 
