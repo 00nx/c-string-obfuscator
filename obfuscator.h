@@ -1,78 +1,88 @@
 #pragma once
+
 #include <cstddef>
 #include <cstdint>
+#include <array>
 
 namespace obff_internal {
 
-
-constexpr uint8_t xor_key(std::size_t seed) {
-    return static_cast<uint8_t>((seed * 31 + 97) % 256);
+constexpr uint8_t simple_hash(std::size_t seed) noexcept {
+    seed ^= seed >> 12;
+    seed ^= seed >> 25;
+    seed ^= seed >> 27;
+    return static_cast<uint8_t>(seed * 31 + 97);
 }
 
-template <std::size_t N, std::size_t Seed>
-class XorString {
-private:
-    char data[N];
+template <typename CharT, std::size_t N, std::size_t Seed>
+struct XorStringBase {
+protected:
+    std::array<CharT, N> data;
     const uint8_t key;
+    bool decrypted = false;
 
+    constexpr XorStringBase(const CharT (&input)[N], uint8_t k)
+        : key(k) {
+        for (std::size_t i = 0; i < N; ++i)
+            data[i] = input[i] ^ static_cast<CharT>(key);
+    }
+
+public:
+    CharT* decrypt() noexcept {
+        if (!decrypted) {
+            for (std::size_t i = 0; i < N; ++i)
+                data[i] ^= static_cast<CharT>(key);
+            decrypted = true;
+        }
+        return data.data();
+    }
+
+    void zeroize() noexcept {
+        for (std::size_t i = 0; i < N; ++i) {
+            volatile CharT* p = &data[i];
+            *p = CharT(0);
+        }
+    }
+};
+
+template <std::size_t N, std::size_t Seed = __LINE__>
+class XorString : public XorStringBase<char, N, Seed> {
+    using Base = XorStringBase<char, N, Seed>;
 public:
     constexpr XorString(const char (&input)[N])
-        : data{}, key(xor_key(Seed)) {
-        for (std::size_t i = 0; i < N; ++i)
-            data[i] = input[i] ^ key;
-    }
-
-    char* decrypt() {
-        for (std::size_t i = 0; i < N; ++i)
-            data[i] ^= key;
-        return data;
-    }
-
-    void zeroize() {
-        for (std::size_t i = 0; i < N; ++i)
-            data[i] = 0;
-    }
+        : Base(input, simple_hash(Seed)) {}
 };
 
-template <std::size_t N, std::size_t Seed>
-class XorWString {
-private:
-    wchar_t data[N];
-    const uint8_t key;
-
+template <std::size_t N, std::size_t Seed = __LINE__>
+class XorWString : public XorStringBase<wchar_t, N, Seed> {
+    using Base = XorStringBase<wchar_t, N, Seed>;
 public:
     constexpr XorWString(const wchar_t (&input)[N])
-        : data{}, key(xor_key(Seed)) {
-        for (std::size_t i = 0; i < N; ++i)
-            data[i] = input[i] ^ key;
-    }
-
-    wchar_t* decrypt() {
-        for (std::size_t i = 0; i < N; ++i)
-            data[i] ^= key;
-        return data;
-    }
-
-    void zeroize() {
-        for (std::size_t i = 0; i < N; ++i)
-            data[i] = 0;
-    }
+        : Base(input, simple_hash(Seed)) {}
 };
 
-} 
-#define __OBF_UNIQUE_ID_IMPL(lineno) _obf_##lineno
-#define __OBF_UNIQUE_ID(lineno) __OBF_UNIQUE_ID_IMPL(lineno)
-#define obfuscate(str) []() { \
-    static constexpr auto __OBF_UNIQUE_ID(__LINE__) = \
-        obff_internal::XorString<sizeof(str), __LINE__>(str); \
-    static auto val = __OBF_UNIQUE_ID(__LINE__); \
-    return val.decrypt(); \
+template <typename XorStr>
+class AutoZero {
+    XorStr& str;
+public:
+    explicit AutoZero(XorStr& s) : str(s) {}
+    ~AutoZero() { str.zeroize(); }
+    typename XorStr::CharT* get() const noexcept { return str.decrypt(); }
+};
+
+}
+
+#define OBF(str) []() -> const char* { \
+    static obff_internal::XorString<sizeof(str)> obfuscated(str); \
+    return obfuscated.decrypt(); \
 }()
 
+#define OBF_W(str) []() -> const wchar_t* { \
+    static obff_internal::XorWString<sizeof(str)/sizeof(wchar_t)> obfuscated(str); \
+    return obfuscated.decrypt(); \
+}()
 
-#define obfuscate_w(str) []() { \
-    static constexpr auto __OBF_UNIQUE_ID(__LINE__) = \
-        obff_internal::XorWString<sizeof(str) / sizeof(wchar_t), __LINE__>(str); \
-    static auto val = __OBF_UNIQUE_ID(__LINE__); \
-    return val.decrypt(); \
+#define OBF_AUTO(str) []() { \
+    static obff_internal::XorString<sizeof(str)> obfuscated(str); \
+    static obff_internal::AutoZero<decltype(obfuscated)> guard(obfuscated); \
+    return guard.get(); \
 }()
