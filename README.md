@@ -1,47 +1,54 @@
-🔒 C++ String Obfuscator (XOR-Based)
+#  C++ Compile-Time String Obfuscator (Rolling XOR)
 
- Features
-- Compile-time XOR obfuscation of char[] and wchar_t[]
-- Simple macro usage with automatic seed based on source line number
-- Easy integration (just include one header)
-- Runtime decryption + memory zeroization support
+**Lightweight • Header-only • Hard-to-grep • Anti-static-analysis friendly**
 
+[![C++17](https://img.shields.io/badge/C++-17-blue?logo=c%2B%2B)](https://isocpp.org/std/the-standard)
+[![Header-only](https://img.shields.io/badge/Header--only-yes-success)](#)
+[![No dependencies](https://img.shields.io/badge/dependencies-none-important)](#)
 
-⚙️ How It Works
-Strings are XOR-encoded at compile time using a seed derived from the line number, then decoded at runtime using the same key. This helps evade static analysis and basic reverse engineering.
+##  Features
 
-## example usage ( c++ )
+- Compile-time XOR obfuscation of string literals (`char[]` & `wchar_t[]`)
+- **Rolling XOR key stream** — different key byte per position (16-byte cycle by default)
+- Strong compile-time seed mixing (inspired by splitmix64 / wyhash)
+- Lazy decryption (happens only when you first access the string)
+- **Automatic zeroization** on scope exit (via RAII helper)
+- Very simple & clean macro syntax
+- Header-only — drop-in single file integration
+- No external dependencies, no dynamic allocation
+
+## Why better than plain single-byte XOR?
+
+| Feature                     | Classic single XOR | This version (rolling)     |
+|-----------------------------|--------------------|-----------------------------|
+| Key per string              | 1 byte             | 16-byte cycling stream      |
+| Static analysis resistance  | Low                | Significantly higher        |
+| Easy to grep / pattern match| Very easy          | Much harder                 |
+| Key derivation              | Weak shifts/mul    | Strong mixer (wyhash-like)  |
+| Memory cleanup              | Manual             | Automatic RAII              |
+
+## Quick Start
+
 ```cpp
 #include "obfuscator.h"
 
-int main() {
-    const char* secret = obfuscate("Hello, World!");
-    const wchar_t* wide_secret = obfuscate_w(L"Sensitive WString");
-    
-    printf("Decrypted: %s\n", secret);
+int main()
+{
+    // Most common & safest way — decrypt + auto-zeroize when leaving scope
+    const char* msg = OBF_AUTO("kernel32.dll");
+
+    // One-time decrypt (stays decrypted until program ends or zeroized manually)
+    const char* api = OBF("CreateRemoteThread");
+
+    // Wide string versions
+    const wchar_t* wpath = OBF_W_AUTO(L"C:\\Windows\\Temp\\payload.bin");
+
+    wprintf(L"Path: %s\n", wpath);
+    printf("API name: %s\n", api);
+
+    // You can also use it inside functions, conditions, etc.
+    if (some_condition) {
+        MessageBoxA(NULL, OBF_AUTO("Critical error!"), OBF("Error"), MB_ICONERROR);
+    }
 }
-```
-
-
- Overview
-```obfuscate("string")```
-Accepts a ```const char[]``` literal
-
-- Obfuscates it using an XOR key derived from the line number
-
-- Decrypts lazily at runtime when used
-
-```obfuscate_w(L"wstring")```
-- Accepts a ```const wchar_t[]``` wide string literal
-- XOR-obfuscated at compile time
-- Decrypted on demand
-
-**Internals (Header)**
-
-- ```XorString<N, Seed>``` : Template for narrow strings
-- ```XorWString<N, Seed>``` : Template for wide strings
-- ```xor_key(seed)``` : Generates a pseudo-random XOR key from the seed
-
-```cpp
-const char* hidden = obfuscate("Secret123!");
 ```
