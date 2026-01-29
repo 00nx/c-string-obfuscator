@@ -52,3 +52,14 @@ int main()
     }
 }
 ```
+
+## Available Macros
+
+| Macro              | Behavior                                           | Recommended? | Lifetime of decrypted data          |
+|--------------------|----------------------------------------------------|--------------|-------------------------------------|
+| `OBF("...")`       | Lazy decrypt, stays decrypted in memory forever    | Sometimes    | Until program ends                  |
+| `OBF_AUTO("...")`  | Decrypt + **auto zeroize** when leaving scope      | **Yes**      | Only while in current scope         |
+| `OBF_W("L...")`    | Wide version — lazy decrypt                        | Sometimes    | Until program ends                  |
+| `OBF_W_AUTO("L...")`| Wide version + **auto zeroize** on scope exit     | **Yes**      | Only while in current scope         |
+
+**Recommendation**: Use `OBF_AUTO` / `OBF_W_AUTO` in most cases — it's significantly safer as it minimizes the time sensitive strings remain in plaintext in memory.
