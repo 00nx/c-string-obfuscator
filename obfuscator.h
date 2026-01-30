@@ -3,14 +3,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
-#include <cstring>      // std::fill
-#include <utility>      // std::forward
+#include <cstring>      
+#include <utility>      
 
 namespace obff_internal {
 
-// ───────────────────────────────────────────────
-//  Better compile-time hash mixer (inspired by splitmix64 / wyhash style)
-// ───────────────────────────────────────────────
+
 constexpr uint64_t mix_seed(uint64_t z) noexcept {
     z ^= z >> 30;
     z *= 0xbf58476d1ce4e5b9ull;
@@ -25,9 +23,7 @@ constexpr uint8_t derive_key(std::size_t seed) noexcept {
     return static_cast<uint8_t>(mixed ^ (mixed >> 56));
 }
 
-// ───────────────────────────────────────────────
-//  Generate small rolling key stream from seed
-// ───────────────────────────────────────────────
+
 template<std::size_t KeyLen = 16>
 constexpr auto make_rolling_key(std::size_t seed) noexcept {
     std::array<uint8_t, KeyLen> key{};
@@ -42,9 +38,7 @@ constexpr auto make_rolling_key(std::size_t seed) noexcept {
     return key;
 }
 
-// ───────────────────────────────────────────────
-//  Core obfuscated string storage (char / wchar_t agnostic)
-// ───────────────────────────────────────────────
+
 template<typename CharT, std::size_t N, std::size_t Seed>
 struct XorStringBase {
     static constexpr std::size_t KeyLen = 16;
@@ -62,11 +56,9 @@ struct XorStringBase {
 
     CharT* decrypt() noexcept {
         if (!decrypted) {
-            // Main hot path — hopefully gets unrolled / vectorized
             CharT* p = data.data();
             const CharT* end = p + N;
 
-            // We can hint compiler that N is small/medium in many cases
             while (p < end) {
                 std::size_t idx = static_cast<std::size_t>(p - data.data());
                 *p++ ^= static_cast<CharT>(key_stream[idx % KeyLen]);
@@ -79,19 +71,15 @@ struct XorStringBase {
 
     void zeroize() noexcept {
         volatile CharT* p = data.data();
-        // Modern compilers understand this pattern better than hand-written loop
         std::fill(data.begin(), data.end(), CharT{0});
 
-        // Extra barrier (helps against aggressive optimizer reordering)
         asm volatile ("" : : "r,m"(p) : "memory");
     }
 
-    ~XorStringBase() { zeroize(); }  // ← added RAII zero on destruction
+    ~XorStringBase() { zeroize(); }  
 };
 
-// ───────────────────────────────────────────────
-//  char / wchar_t specializations
-// ───────────────────────────────────────────────
+
 template<std::size_t N, std::size_t Seed = __LINE__>
 struct XorString : XorStringBase<char, N, Seed> {
     using base = XorStringBase<char, N, Seed>;
